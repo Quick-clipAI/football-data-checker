@@ -129,9 +129,20 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   }
   function errText(j){
     if (!j) return '';
-    var e = j.errors; if (!e) return '';
-    if (Array.isArray(e)) return e.join('; ');
-    return Object.keys(e).map(function(k){ return k + ': ' + e[k]; }).join('; ');
+    var parts = [];
+    var e = j.errors;
+    if (e) parts.push(Array.isArray(e) ? e.join('; ') : Object.keys(e).map(function(k){ return k + ': ' + e[k]; }).join('; '));
+    if (j.api && j.api.error) parts.push(String(j.api.error));
+    return parts.filter(Boolean).join('; ');
+  }
+  // Plain-English explanation when the proxy says the API key was rejected (HTTP 401 from your site).
+  function keyHelp(j){
+    var p = j && j.proxy; if (!p) return '';
+    var t = 'API-Football turned the key down. Your site is sending a key that is ' + p.keyLength + ' characters long (they are normally ' + p.typicalKeyLength + ').';
+    if (p.keyLength !== p.typicalKeyLength) t += ' That length is wrong: the value in Vercel was probably copied with extra characters, or it is not the whole key.';
+    if (p.cleanedAutomatically) t += ' (Stray spaces or quotes were removed automatically.)';
+    t += ' Fix: re-enter API_SPORTS_KEY in Vercel, then REDEPLOY. Changing a variable does not change a site that is already deployed.';
+    return t;
   }
   function rawBox(raw){ var d = document.createElement('details'); d.className = 'rawd'; var sm = document.createElement('summary'); sm.textContent = 'Raw reply from your site'; var pre = document.createElement('pre'); pre.className = 'raw'; pre.textContent = raw; d.appendChild(sm); d.appendChild(pre); return d; }
   function el(tag, text, cls){ var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
@@ -142,15 +153,18 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
     var out = $('planOut'); out.className = 'status'; out.textContent = 'Asking your site…'; $('status').disabled = true;
     try {
       var r = await api('status');
+      if (r.http === 401 && r.json && r.json.proxy){ planRaw = r.raw; throw new Error(keyHelp(r.json)); }
       if (r.http !== 200 || !r.json) throw new Error('Your site answered ' + r.http + (r.json && r.json.error ? ': ' + (r.json.error.message || r.json.error) : ''));
-      var e = errText(r.json); if (e) throw new Error(e);
+      var e = errText(r.json); if (e){ planRaw = r.raw; throw new Error(e); }
+      if (!r.json.response || r.json.response.requests == null){ planRaw = r.raw; throw new Error('The reply had no plan information in it, so the key is probably not being accepted. Open the raw reply below.'); }
       planRaw = r.raw; var d = r.json.response || {}, sub = d.subscription || {}, rq = d.requests || {};
       var left = (rq.limit_day != null && rq.current != null) ? (rq.limit_day - rq.current) : null;
       out.textContent = 'Plan: ' + (sub.plan || 'unknown') + (sub.active === false ? ' (not active)' : '') + '. Requests used today: ' + rq.current + ' of ' + rq.limit_day + (left != null ? ' (' + left + ' left)' : '') + '. Subscription ends: ' + (sub.end || 'n/a') + '.';
       log.push('PLAN ' + out.textContent);
     } catch (e){
       out.className = 'status err';
-      out.textContent = (e && e.message ? e.message : 'Could not reach your site') + ' — check the address and that your site is deployed.';
+      var msg = e && e.message ? e.message : 'Could not reach your site';
+      out.textContent = msg.indexOf('Fix:') >= 0 ? msg : msg + ' — check the address and that your site is deployed.';
     }
     if (planRaw){ out.appendChild(rawBox(planRaw)); }
     $('status').disabled = false;
