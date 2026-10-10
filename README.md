@@ -12,9 +12,19 @@ It contains the same football proxy Creator Booth uses, a server check, and the 
    - Name: `API_SPORTS_KEY`
    - Value: your key from the API-Football dashboard (no spaces, no quotes)
 4. Deploy, then open `https://<your-project>.vercel.app`.
-5. Tap **Run server check**. It says in plain English whether the key works.
+5. Tap **Run server check**. It tests the key two ways at once and says in plain English what it found.
+
+## Why two tests
+
+API-Football's documentation says the API accepts only the `x-apisports-key` header and that Node.js
+"automatically adds extra headers" which must be removed. Node's built-in `fetch` adds five
+(`accept`, `accept-language`, `sec-fetch-mode`, `user-agent`, `accept-encoding`). The proxy here
+sends a minimal request instead. The server check runs both styles side by side.
 
 ## Reading the result
+
+- **"FOUND IT"** - the key is fine; API-Football refuses requests that carry Node's extra headers.
+  The proxy in this project already avoids that, so everything below should now work.
 
 - **"The key works"** - the key is fine. The problem is in the main project's Vercel settings
   (wrong variable, wrong environment, or not redeployed after changing it).

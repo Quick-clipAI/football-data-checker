@@ -160,12 +160,12 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
     try {
       var res = await fetch('/api/diag', { cache: 'no-store' });
       var j = await res.json();
-      var good = j.probe && j.probe.http === 200 && !j.probe.errors && j.probe.requestsToday != null;
+      var good = j.tests && (j.tests.B_minimalRequest.works || j.tests.A_nodeFetch_extraHeaders.works);
       out.className = 'status' + (good ? '' : ' err');
       out.textContent = '';
       var v = document.createElement('p'); v.textContent = j.verdict || 'No verdict returned.'; v.style.fontWeight = '600'; out.appendChild(v);
       var d = document.createElement('details'); d.className = 'rawd'; var sm = document.createElement('summary'); sm.textContent = 'Details (safe to share, contains no key)';
-      var pre = document.createElement('pre'); pre.className = 'raw'; pre.textContent = JSON.stringify({ env: j.env, probe: j.probe, vercel: j.vercel }, null, 2);
+      var pre = document.createElement('pre'); pre.className = 'raw'; pre.textContent = JSON.stringify({ env: j.env, tests: j.tests, vercel: j.vercel }, null, 2);
       d.appendChild(sm); d.appendChild(pre); out.appendChild(d);
     } catch (e){ out.className = 'status err'; out.textContent = 'Could not run the server check: ' + (e && e.message ? e.message : e); }
     $('diag').disabled = false;
