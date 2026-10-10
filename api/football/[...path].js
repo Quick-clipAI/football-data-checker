@@ -11,6 +11,44 @@
 //   /api/football/fixtures?live=all     -> https://v3.football.api-sports.io/fixtures?live=all
 // Any path/query after /api/football/ is forwarded through untouched.
 
+// ---- Minimal GET ----------------------------------------------------------------------------
+// API-Football's documentation says the API accepts ONLY the x-apisports-key header and warns that
+// Node.js "automatically adds extra headers" that must be removed. Node's fetch() silently adds
+// accept, accept-language, sec-fetch-mode, user-agent and accept-encoding. node:https adds nothing
+// beyond Host and Connection, so this sends exactly what the documentation asks for.
+import https from 'node:https';
+import http from 'node:http';
+import zlib from 'node:zlib';
+
+const API_BASE = process.env.API_SPORTS_BASE || 'https://v3.football.api-sports.io';
+
+function minimalGet(urlStr, key, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(urlStr);
+    const lib = u.protocol === 'http:' ? http : https;
+    const req = lib.request(u, { method: 'GET', headers: { 'x-apisports-key': key } }, (resp) => {
+      const chunks = [];
+      resp.on('data', (c) => chunks.push(c));
+      resp.on('error', reject);
+      resp.on('end', () => {
+        let buf = Buffer.concat(chunks);
+        try {
+          const enc = String(resp.headers['content-encoding'] || '').toLowerCase();
+          if (enc === 'gzip') buf = zlib.gunzipSync(buf);
+          else if (enc === 'deflate') buf = zlib.inflateSync(buf);
+          else if (enc === 'br') buf = zlib.brotliDecompressSync(buf);
+        } catch (e) { /* fall through; JSON parse below will fail and data stays null */ }
+        let data = null;
+        try { data = JSON.parse(buf.toString('utf8')); } catch (e) { /* not JSON */ }
+        resolve({ status: resp.statusCode || 0, data });
+      });
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('API-Football did not answer within ' + Math.round(timeoutMs / 1000) + 's')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 export default async function handler(req, res) {
   // CORS: needed now that the Android app (bundled locally, different origin) calls this same
   // endpoint via its absolute URL instead of a same-origin relative path. The comment below
@@ -43,15 +81,11 @@ export default async function handler(req, res) {
   params.delete('path');
   const qs = params.toString();
 
-  const url = `https://v3.football.api-sports.io/${upstreamPath}${qs ? '?' + qs : ''}`;
+  const url = `${API_BASE}/${upstreamPath}${qs ? '?' + qs : ''}`;
 
   try {
-    const upstream = await fetch(url, {
-      headers: {
-        'x-apisports-key': key
-      }
-    });
-    const data = await upstream.json().catch(() => ({}));
+    const upstream = await minimalGet(url, key);
+    const data = upstream.data || {};
 
     // API-Football reports a rejected key with HTTP 200 and an error inside the body (v3 puts it in
     // errors.token; an older style uses api.error). Passing that through as a "success" hid the real
@@ -65,6 +99,7 @@ export default async function handler(req, res) {
           keyLength: key.length,
           typicalKeyLength: 32,
           cleanedAutomatically: key !== rawKey,
+          requestStyle: 'minimal (only the x-apisports-key header)',
           fix: 'In Vercel → Settings → Environment Variables, re-enter API_SPORTS_KEY (copy it from the API-Football dashboard, no spaces or quotes), then redeploy. Changing a variable does not affect an existing deployment.'
         }
       });
