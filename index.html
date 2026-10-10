@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta name="robots" content="noindex,nofollow"/>
-<title>Football data checker</title>
+<title>Football proxy test</title>
 <style>
 :root{
   --bg:#eef1ee; --panel:#fbfcfb; --ink:#1b2227; --ink2:#55615f; --line:#c9d1cc; --accent:#0b6b6b; --accent-ink:#ffffff;
@@ -82,12 +82,19 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   <h1>Football data checker</h1>
   <p class="lede">See what your API-Football plan really covers: how many leagues, which data types, which seasons, and how many requests are left today. It goes through your own site, so no key is typed here.</p>
 
+  <section aria-labelledby="s0">
+    <h2 id="s0">0. Server check (start here)</h2>
+    <p class="hint">Free. Asks this site's server to test the API-Football key and tells you in plain English what is wrong. The key is never shown, only its length and first/last two characters.</p>
+    <button id="diag" class="primary" type="button">Run server check</button>
+    <div id="diagOut" class="status" role="status" aria-live="polite"></div>
+  </section>
+
   <section aria-labelledby="s1">
     <h2 id="s1">1. Your site</h2>
     <p class="hint">Requests use your real API-Football key, so they count against your daily limit. The plan check is free; everything else costs 1 request each.</p>
     <label class="k" for="base">Your football proxy address</label>
     <div class="keyrow">
-      <input id="base" type="text" inputmode="url" autocomplete="off" spellcheck="false" value="https://creator-boot.vercel.app/api/football"/>
+      <input id="base" type="text" inputmode="url" autocomplete="off" spellcheck="false" value="/api/football"/>
       <button id="status" class="primary" type="button">Check my plan</button>
     </div>
     <div id="planOut" class="status" role="status" aria-live="polite"></div>
@@ -146,6 +153,23 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   }
   function rawBox(raw){ var d = document.createElement('details'); d.className = 'rawd'; var sm = document.createElement('summary'); sm.textContent = 'Raw reply from your site'; var pre = document.createElement('pre'); pre.className = 'raw'; pre.textContent = raw; d.appendChild(sm); d.appendChild(pre); return d; }
   function el(tag, text, cls){ var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+
+  // ---------- 0. server check ----------
+  $('diag').addEventListener('click', async function(){
+    var out = $('diagOut'); out.className = 'status'; out.textContent = 'Checking…'; $('diag').disabled = true;
+    try {
+      var res = await fetch('/api/diag', { cache: 'no-store' });
+      var j = await res.json();
+      var good = j.probe && j.probe.http === 200 && !j.probe.errors && j.probe.requestsToday != null;
+      out.className = 'status' + (good ? '' : ' err');
+      out.textContent = '';
+      var v = document.createElement('p'); v.textContent = j.verdict || 'No verdict returned.'; v.style.fontWeight = '600'; out.appendChild(v);
+      var d = document.createElement('details'); d.className = 'rawd'; var sm = document.createElement('summary'); sm.textContent = 'Details (safe to share, contains no key)';
+      var pre = document.createElement('pre'); pre.className = 'raw'; pre.textContent = JSON.stringify({ env: j.env, probe: j.probe, vercel: j.vercel }, null, 2);
+      d.appendChild(sm); d.appendChild(pre); out.appendChild(d);
+    } catch (e){ out.className = 'status err'; out.textContent = 'Could not run the server check: ' + (e && e.message ? e.message : e); }
+    $('diag').disabled = false;
+  });
 
   // ---------- 1. plan ----------
   var planRaw = '';

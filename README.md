@@ -1,21 +1,30 @@
-# Football data checker
+# Football proxy test
 
-One page, no build step. It asks **your own Vercel site** (`/api/football`) questions, so the API-Football key never
-leaves Vercel and nothing is typed into this page.
+A throwaway Vercel project that tests the API-Football key on its own, away from Creator Booth.
+It contains the same football proxy Creator Booth uses, a server check, and the checker page.
 
-It shows: your plan and today's request count, how many competitions are covered and what data each has, and
-which seasons / data types your plan blocks.
+## Deploy (about 5 minutes)
 
-Each test spends 1 of your daily API-Football requests (the plan check is free). Ticked tests are listed with their cost.
+1. New GitHub repo (private is fine), e.g. `football-proxy-test`. Upload everything in this folder.
+   Make sure `api/diag.js` and `api/football/[...path].js` are there.
+2. Vercel -> Add New -> Project -> import that repo. Framework Preset: **Other**.
+3. Before deploying, open **Environment Variables** and add:
+   - Name: `API_SPORTS_KEY`
+   - Value: your key from the API-Football dashboard (no spaces, no quotes)
+4. Deploy, then open `https://<your-project>.vercel.app`.
+5. Tap **Run server check**. It says in plain English whether the key works.
 
-## Put it online (GitHub Pages)
-1. New public repo, e.g. `football-data-checker`. Upload `index.html` and this README.
-2. Settings → Pages → Deploy from a branch → `main` / `(root)` → Save.
-3. Open `https://<your-username>.github.io/football-data-checker/`.
+## Reading the result
 
-Your site must be deployed and allow cross-site calls to `/api/football` (it does).
+- **"The key works"** - the key is fine. The problem is in the main project's Vercel settings
+  (wrong variable, wrong environment, or not redeployed after changing it).
+- **"...refused a correctly shaped key"** - compare the first/last two characters it shows with the
+  key in your API-Football dashboard. If they match, the key is blocked or disabled on their side.
+- **"...does not look like a normal 32-character key"** - the pasted value is wrong or incomplete.
+- **"not set for this deployment"** - add the variable and redeploy (a variable change never affects
+  an existing deployment).
 
-## If "Check my plan" shows an error
+## Afterwards
 
-- **"API-Football turned the key down … N characters long":** your site reached API-Football, but the key it sent was refused. Keys are normally 32 characters. Re-enter `API_SPORTS_KEY` in Vercel (copy from the API-Football dashboard, no spaces or quotes) and **redeploy**. Changing a variable does not change a site that is already deployed. This message needs the v1.2.5 or newer version of the main site.
-- **A plain "NOT AUTORIZED / API KEY MISSING" message:** same problem, seen through an older version of the main site.
+The test endpoints are public, so anyone who finds the address could use up your 100 daily requests.
+Delete the project when you are done.
