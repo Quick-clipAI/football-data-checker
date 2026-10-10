@@ -73,6 +73,8 @@ th{font-weight:600;color:var(--ink2)}
 .list li{padding:8px 10px;border-top:1px solid var(--line);font-size:14px}
 .list li:first-child{border-top:0}
 .list small{color:var(--ink2)}
+.raw{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.4 var(--mono);background:var(--bg);border:1px solid var(--line);padding:8px;border-radius:6px;margin:6px 0 0;max-height:260px;overflow:auto}
+details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:6px}
 </style>
 </head>
 <body>
@@ -121,8 +123,9 @@ th{font-weight:600;color:var(--ink2)}
   async function api(path, signal){
     var t0 = performance.now();
     var res = await fetch(base() + '/' + path, { signal: signal });
-    var json = await res.json().catch(function(){ return null; });
-    return { http: res.status, json: json, ms: Math.round(performance.now() - t0) };
+    var text = await res.text().catch(function(){ return ''; });
+    var json = null; try { json = JSON.parse(text); } catch (e) {}
+    return { http: res.status, json: json, raw: 'HTTP ' + res.status + '\n' + text.slice(0, 900), ms: Math.round(performance.now() - t0) };
   }
   function errText(j){
     if (!j) return '';
@@ -130,16 +133,18 @@ th{font-weight:600;color:var(--ink2)}
     if (Array.isArray(e)) return e.join('; ');
     return Object.keys(e).map(function(k){ return k + ': ' + e[k]; }).join('; ');
   }
+  function rawBox(raw){ var d = document.createElement('details'); d.className = 'rawd'; var sm = document.createElement('summary'); sm.textContent = 'Raw reply from your site'; var pre = document.createElement('pre'); pre.className = 'raw'; pre.textContent = raw; d.appendChild(sm); d.appendChild(pre); return d; }
   function el(tag, text, cls){ var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
 
   // ---------- 1. plan ----------
+  var planRaw = '';
   $('status').addEventListener('click', async function(){
     var out = $('planOut'); out.className = 'status'; out.textContent = 'Asking your site…'; $('status').disabled = true;
     try {
       var r = await api('status');
       if (r.http !== 200 || !r.json) throw new Error('Your site answered ' + r.http + (r.json && r.json.error ? ': ' + (r.json.error.message || r.json.error) : ''));
       var e = errText(r.json); if (e) throw new Error(e);
-      var d = r.json.response || {}, sub = d.subscription || {}, rq = d.requests || {};
+      planRaw = r.raw; var d = r.json.response || {}, sub = d.subscription || {}, rq = d.requests || {};
       var left = (rq.limit_day != null && rq.current != null) ? (rq.limit_day - rq.current) : null;
       out.textContent = 'Plan: ' + (sub.plan || 'unknown') + (sub.active === false ? ' (not active)' : '') + '. Requests used today: ' + rq.current + ' of ' + rq.limit_day + (left != null ? ' (' + left + ' left)' : '') + '. Subscription ends: ' + (sub.end || 'n/a') + '.';
       log.push('PLAN ' + out.textContent);
@@ -147,6 +152,7 @@ th{font-weight:600;color:var(--ink2)}
       out.className = 'status err';
       out.textContent = (e && e.message ? e.message : 'Could not reach your site') + ' — check the address and that your site is deployed.';
     }
+    if (planRaw){ out.appendChild(rawBox(planRaw)); }
     $('status').disabled = false;
   });
 
@@ -167,7 +173,8 @@ th{font-weight:600;color:var(--ink2)}
       if (r.http !== 200 || !r.json) throw new Error('Your site answered ' + r.http);
       var e = errText(r.json); if (e) throw new Error(e);
       LEAGUES = r.json.response || [];
-      renderLeagues(); log.push('LEAGUES ' + LEAGUES.length + ' competitions in the current season');
+      renderLeagues();
+      if (!LEAGUES.length){ var w = el('p','The answer had no competitions in it. That should not happen with a working key. Open the raw reply below.','status err'); $('leagueOut').insertBefore(w, $('leagueOut').firstChild); $('leagueOut').appendChild(rawBox(r.raw)); } log.push('LEAGUES ' + LEAGUES.length + ' competitions in the current season');
     } catch (e){ out.textContent = ''; out.appendChild(el('p', (e && e.message ? e.message : 'Failed') , 'status err')); }
     $('leagues').disabled = false;
   });
@@ -228,20 +235,21 @@ th{font-weight:600;color:var(--ink2)}
   var running = false, ctl = null;
   function classify(r){
     var e = errText(r.json);
-    if (r.http !== 200 || !r.json) return { state:'fail', label:'Site error', why:'HTTP ' + r.http + (r.json && r.json.error ? ': ' + (r.json.error.message || r.json.error) : '') };
+    if (r.http !== 200 || !r.json) return { state:'fail', label:'Site error', why:'HTTP ' + r.http + (r.json && r.json.error ? ': ' + (r.json.error.message || r.json.error) : '') + (r.json ? '' : ' (not JSON)'), raw:r.raw };
     if (e){
       var plan = /plan|season|access|free/i.test(e);
       var quota = /request|limit|rate/i.test(e) && !plan;
-      return { state: quota ? 'warn' : 'fail', label: plan ? 'Blocked by plan' : (quota ? 'Limit reached' : 'Refused'), why:e };
+      return { state: quota ? 'warn' : 'fail', label: plan ? 'Blocked by plan' : (quota ? 'Limit reached' : 'Refused'), why:e, raw:r.raw };
     }
-    var n = r.json.results != null ? r.json.results : (r.json.response || []).length;
+    if (!Array.isArray(r.json.response) && (typeof r.json.response !== 'object' || r.json.response === null)) return { state:'fail', label:'Unexpected reply', why:'Not in API-Football format. Open the raw reply.', raw:r.raw };
+    var n = r.json.results != null ? r.json.results : (Array.isArray(r.json.response) ? r.json.response.length : 1);
     return n > 0 ? { state:'pass', label:'Works', why:n + ' result' + (n === 1 ? '' : 's') + ' · ' + r.ms + ' ms' }
-                 : { state:'warn', label:'Empty', why:'Allowed, but no data returned (0 results)' };
+                 : { state:'warn', label:'Empty', why:'No error, but 0 results. If every test is empty, check the API-Football dashboard (account status and requests used).', raw:r.raw };
   }
   function renderProbes(rows){
     var o = $('probeOut'); o.textContent = ''; if (!rows.length) return;
     var tb = el('table'), hr = el('tr'); ['Test','Result','Detail'].forEach(function(t){ hr.appendChild(el('th', t)); }); tb.appendChild(hr);
-    rows.forEach(function(r){ var tr = el('tr'); tr.appendChild(el('td', r.label)); var td = el('td'); td.appendChild(el('span', r.res.label, 'pill ' + r.res.state)); tr.appendChild(td); tr.appendChild(el('td', r.res.why)); tb.appendChild(tr); });
+    rows.forEach(function(r){ var tr = el('tr'); tr.appendChild(el('td', r.label)); var td = el('td'); td.appendChild(el('span', r.res.label, 'pill ' + r.res.state)); tr.appendChild(td); var dt = el('td', r.res.why); if (r.res.raw) dt.appendChild(rawBox(r.res.raw)); tr.appendChild(dt); tb.appendChild(tr); });
     o.appendChild(tb);
   }
   $('run').addEventListener('click', async function(){
@@ -251,7 +259,7 @@ th{font-weight:600;color:var(--ink2)}
       for (var i = 0; i < list.length && running; i++){
         var p = list[i], row = { label:p.label, res:{ state:'idle', label:'Testing…', why:'' } }; rows.push(row); renderProbes(rows);
         try { row.res = classify(await api(p.path, ctl.signal)); } catch (e){ if (e && e.name === 'AbortError') break; row.res = { state:'fail', label:'No reply', why:'Could not reach your site' }; }
-        log.push(p.label + ' -> ' + row.res.label + ' (' + row.res.why + ')'); renderProbes(rows);
+        log.push(p.label + ' -> ' + row.res.label + ' (' + row.res.why + ')' + (row.res.raw ? ' RAW: ' + row.res.raw.replace(/\s+/g,' ') : '')); renderProbes(rows);
         await new Promise(function(r){ setTimeout(r, 400); });   // stay under the 10-per-minute limit of the free plan
         if (row.res.label === 'Limit reached') break;
       }
