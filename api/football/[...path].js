@@ -73,15 +73,15 @@ export default async function handler(req, res) {
     });
   }
 
-  const { path = [] } = req.query;
-  const upstreamPath = Array.isArray(path) ? path.join('/') : String(path);
-
-  // Rebuild the query string, dropping the catch-all "path" param Vercel injects.
-  const params = new URLSearchParams(req.query);
-  params.delete('path');
-  const qs = params.toString();
-
-  const url = `${API_BASE}/${upstreamPath}${qs ? '?' + qs : ''}`;
+  const target = resolveTarget(req);
+  if (!target.path || !/^[A-Za-z0-9_\/-]+$/.test(target.path) || target.path.includes('..')) {
+    return res.status(400).json({
+      error: 'Could not work out which API-Football endpoint was requested.',
+      proxy: { requestedPath: target.path, pathFoundIn: target.pathFoundIn, requestUrl: String(req.url || ''), queryKeysSeen: Object.keys(req.query || {}) }
+    });
+  }
+  const qs = target.params.toString();
+  const url = `${API_BASE}/${target.path}${qs ? '?' + qs : ''}`;
 
   try {
     const upstream = await minimalGet(url, key);
@@ -100,6 +100,9 @@ export default async function handler(req, res) {
           typicalKeyLength: 32,
           cleanedAutomatically: key !== rawKey,
           requestStyle: 'minimal (only the x-apisports-key header)',
+          requestedPath: target.path,
+          pathFoundIn: target.pathFoundIn,
+          forwardedQueryKeys: [...target.params.keys()],
           fix: 'In Vercel → Settings → Environment Variables, re-enter API_SPORTS_KEY (copy it from the API-Football dashboard, no spaces or quotes), then redeploy. Changing a variable does not affect an existing deployment.'
         }
       });
@@ -119,4 +122,52 @@ function isKeyRejected(data) {
   if (v3 && (v3.token || v3.access)) return true;
   const legacy = data.api && data.api.error;
   return typeof legacy === 'string' && /AUTORIZED|AUTHORI[SZ]ED|API KEY|BLOCKED/i.test(legacy);
+}
+
+// Works out WHICH API-Football endpoint was asked for, and with which parameters.
+// The URL the visitor actually requested is the most reliable source. Vercel's catch-all value in
+// req.query can arrive as an array, a string, or under a different name, and a lost path means the
+// call goes to API-Football's bare root address, which answers with a misleading
+// "NOT AUTORIZED ..." message even for a perfectly good key.
+function resolveTarget(req) {
+  const HELPER_KEYS = ['path', '...path', '[...path]'];
+  const clean = (v) => String(v || '').replace(/^\/+|\/+$/g, '');
+  let pathname = '';
+  let urlParams = new URLSearchParams();
+  try {
+    const u = new URL(String(req.url || ''), 'http://localhost');
+    pathname = u.pathname;
+    urlParams = u.searchParams;
+  } catch (e) { /* fall through to req.query */ }
+
+  let path = '';
+  let pathFoundIn = 'none';
+  const marker = '/api/football/';
+  const at = pathname.indexOf(marker);
+  if (at >= 0) {
+    let candidate = clean(decodeURIComponent(pathname.slice(at + marker.length)));
+    if (candidate && !candidate.includes('[')) { path = candidate; pathFoundIn = 'url'; }
+  }
+  if (!path) {
+    for (const k of HELPER_KEYS) {
+      const raw = urlParams.get(k);
+      if (raw) { path = clean(raw); pathFoundIn = 'url-query'; break; }
+    }
+  }
+  const q = req.query || {};
+  if (!path) {
+    for (const k of HELPER_KEYS) {
+      if (q[k] != null && q[k] !== '') { path = clean(Array.isArray(q[k]) ? q[k].join('/') : q[k]); pathFoundIn = 'req.query'; break; }
+    }
+  }
+
+  const params = new URLSearchParams(urlParams);
+  if ([...params.keys()].filter((k) => !HELPER_KEYS.includes(k)).length === 0) {
+    for (const [k, v] of Object.entries(q)) {
+      if (HELPER_KEYS.includes(k)) continue;
+      if (Array.isArray(v)) v.forEach((x) => params.append(k, String(x))); else params.append(k, String(v));
+    }
+  }
+  HELPER_KEYS.forEach((k) => params.delete(k));
+  return { path, pathFoundIn, params };
 }
