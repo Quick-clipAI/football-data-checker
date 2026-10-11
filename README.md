@@ -14,6 +14,14 @@ It contains the same football proxy Creator Booth uses, a server check, and the 
 4. Deploy, then open `https://<your-project>.vercel.app`.
 5. Tap **Run server check**. It tests the key two ways at once and says in plain English what it found.
 
+## What this project found
+
+The server check showed the key works (even plain `fetch`), while the proxy's `/api/football/status`
+route failed with API-Football's misleading "NOT AUTORIZED" message. So the proxy was asking for the
+wrong thing: it took the endpoint name from a value Vercel passes in `req.query`, which can arrive
+under a different name. If it is lost, the call goes to API-Football's bare root address. The proxy now
+reads the endpoint from the real request URL first, and every error shows the path it actually sent.
+
 ## Why two tests
 
 API-Football's documentation says the API accepts only the `x-apisports-key` header and that Node.js

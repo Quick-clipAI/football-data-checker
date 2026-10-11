@@ -145,10 +145,12 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   // Plain-English explanation when the proxy says the API key was rejected (HTTP 401 from your site).
   function keyHelp(j){
     var p = j && j.proxy; if (!p) return '';
-    var t = 'API-Football turned the key down. Your site is sending a key that is ' + p.keyLength + ' characters long (they are normally ' + p.typicalKeyLength + ').';
-    if (p.keyLength !== p.typicalKeyLength) t += ' That length is wrong: the value in Vercel was probably copied with extra characters, or it is not the whole key.';
-    if (p.cleanedAutomatically) t += ' (Stray spaces or quotes were removed automatically.)';
-    t += ' Fix: re-enter API_SPORTS_KEY in Vercel, then REDEPLOY. Changing a variable does not change a site that is already deployed.';
+    if (p.pathFoundIn === 'none' || (!p.keyLength && p.requestUrl != null)){
+      return 'Your site could not tell which API-Football endpoint was requested. It received the address "' + (p.requestUrl || '(empty)') + '" with these parameter names: ' + ((p.queryKeysSeen || []).join(', ') || '(none)') + '. Fix: send me this message.';
+    }
+    var t = 'API-Football refused this request. Your site asked it for "/' + p.requestedPath + '" (read from the ' + p.pathFoundIn + '), sending ' + ((p.forwardedQueryKeys || []).length ? 'the parameters ' + p.forwardedQueryKeys.join(', ') : 'no parameters') + ', with a key that is ' + p.keyLength + ' characters long.';
+    t += ' If the Server check above says the key works, the key is fine and the request itself is the problem. Fix: send me this message.';
+    if (p.keyLength !== p.typicalKeyLength) t += ' The key length is unusual (normally ' + p.typicalKeyLength + '): re-enter API_SPORTS_KEY in Vercel and REDEPLOY.';
     return t;
   }
   function rawBox(raw){ var d = document.createElement('details'); d.className = 'rawd'; var sm = document.createElement('summary'); sm.textContent = 'Raw reply from your site'; var pre = document.createElement('pre'); pre.className = 'raw'; pre.textContent = raw; d.appendChild(sm); d.appendChild(pre); return d; }
@@ -177,7 +179,7 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
     var out = $('planOut'); out.className = 'status'; out.textContent = 'Asking your site…'; $('status').disabled = true;
     try {
       var r = await api('status');
-      if (r.http === 401 && r.json && r.json.proxy){ planRaw = r.raw; throw new Error(keyHelp(r.json)); }
+      if ((r.http === 401 || r.http === 400) && r.json && r.json.proxy){ planRaw = r.raw; throw new Error(keyHelp(r.json)); }
       if (r.http !== 200 || !r.json) throw new Error('Your site answered ' + r.http + (r.json && r.json.error ? ': ' + (r.json.error.message || r.json.error) : ''));
       var e = errText(r.json); if (e){ planRaw = r.raw; throw new Error(e); }
       if (!r.json.response || r.json.response.requests == null){ planRaw = r.raw; throw new Error('The reply had no plan information in it, so the key is probably not being accepted. Open the raw reply below.'); }
