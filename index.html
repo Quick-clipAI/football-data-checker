@@ -124,6 +124,7 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   var YEAR = new Date().getFullYear(), MONTH = new Date().getMonth() + 1;
   var SEASON = MONTH >= 7 ? YEAR : YEAR - 1;          // season label used by API-Football (start year)
   var TODAY = new Date().toISOString().slice(0,10);
+  function ago(d){ return new Date(Date.now() - d * 864e5).toISOString().slice(0,10); }
   var log = [];                                         // for "Copy all results"
 
   function base(){ return $('base').value.trim().replace(/\/+$/,''); }
@@ -253,18 +254,24 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
 
   // ---------- 3. probes ----------
   var PROBES = [
-    { id:'today',  label:'Today\'s fixtures (all leagues)', path:'fixtures?date=' + TODAY, on:true },
-    { id:'live',   label:'Live matches right now', path:'fixtures?live=all', on:true },
-    { id:'st-now', label:'Premier League table, season ' + SEASON, path:'standings?league=39&season=' + SEASON, on:true },
-    { id:'st-prev',label:'Premier League table, season ' + (SEASON - 1) + ' (tests older seasons)', path:'standings?league=39&season=' + (SEASON - 1), on:true },
-    { id:'team',   label:'Find a club by name (Barcelona)', path:'teams?search=Barcelona', on:true },
+    { id:'today',  label:'Today\'s fixtures (all leagues)', path:'fixtures?date=' + TODAY, on:false },
+    { id:'live',   label:'Live matches right now', path:'fixtures?live=all', on:false },
+    { id:'st-now', label:'Premier League table, season ' + SEASON, path:'standings?league=39&season=' + SEASON, on:false },
+    { id:'st-prev',label:'Premier League table, season ' + (SEASON - 1) + ' (tests older seasons)', path:'standings?league=39&season=' + (SEASON - 1), on:false },
+    { id:'team',   label:'Find a club by name (Barcelona)', path:'teams?search=Barcelona', on:false },
     { id:'coach',  label:'Coach of Barcelona', path:'coachs?team=529', on:false },
     { id:'last5',  label:'Barcelona\'s last 5 matches', path:'fixtures?team=529&last=5', on:false },
     { id:'scorers',label:'La Liga top scorers, season ' + SEASON, path:'players/topscorers?league=140&season=' + SEASON, on:false },
     { id:'inj',    label:'Premier League injuries, season ' + SEASON, path:'injuries?league=39&season=' + SEASON, on:false },
     { id:'trans',  label:'Barcelona transfers', path:'transfers?team=529', on:false },
     { id:'st-2yr', label:'Premier League table, season ' + (SEASON - 2), path:'standings?league=39&season=' + (SEASON - 2), on:false }
-  ];
+  ,
+    // Past-date tests: can we rebuild results (and so tables) ourselves from fixtures?
+    { id:'d-yest', label:'Yesterday\'s results (all leagues)', path:'fixtures?date=' + ago(1), on:true },
+    { id:'d-week', label:'Fixtures 7 days ago, this season', path:'fixtures?date=' + ago(7), on:true },
+    { id:'d-0526', label:'Fixtures on 17 May 2026 (end of 2025/26)', path:'fixtures?date=2026-05-17', on:true },
+    { id:'d-0525', label:'Fixtures on 25 May 2025 (end of 2024/25)', path:'fixtures?date=2025-05-25', on:true },
+    { id:'d-range',label:'All fixtures 1-7 Oct 2026 (date range, no season)', path:'fixtures?from=2026-10-01&to=2026-10-07', on:true }];
   var ul = $('probes');
   PROBES.forEach(function(p){ var li = document.createElement('li'), cb = document.createElement('input'), lb = document.createElement('label');
     cb.type = 'checkbox'; cb.id = 'p_' + p.id; cb.checked = p.on; lb.htmlFor = cb.id; lb.textContent = p.label; lb.style.font = '15px var(--sans)'; li.appendChild(cb); li.appendChild(lb); ul.appendChild(li); });

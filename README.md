@@ -46,3 +46,10 @@ sends a minimal request instead. The server check runs both styles side by side.
 
 The test endpoints are public, so anyone who finds the address could use up your 100 daily requests.
 Delete the project when you are done.
+
+
+## v0.1.1
+
+Added five past-date tests (yesterday, 7 days ago, 17 May 2026, 25 May 2025, a date range) to find out whether
+your plan returns old fixtures by date. Existing tests are now unticked by default to save requests; tick any you need.
+Each ticked test uses 1 of the 100 daily requests.

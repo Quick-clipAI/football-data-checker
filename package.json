@@ -1,6 +1,6 @@
 {
   "name": "football-proxy-test",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Throwaway project that tests the API-Football key on its own: the same proxy as Creator Booth, a server diagnostic, and the checker page.",
   "type": "module"
