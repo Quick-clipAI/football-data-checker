@@ -80,6 +80,8 @@ export default async function handler(req, res) {
       proxy: { requestedPath: target.path, pathFoundIn: target.pathFoundIn, requestUrl: String(req.url || ''), queryKeysSeen: Object.keys(req.query || {}) }
     });
   }
+  // `_nc` is a cache-buster used by the checker page so quota readings are never served from the edge cache.
+  const noCache = target.params.has('_nc'); target.params.delete('_nc');
   const qs = target.params.toString();
   const url = `${API_BASE}/${target.path}${qs ? '?' + qs : ''}`;
 
@@ -109,7 +111,7 @@ export default async function handler(req, res) {
     }
 
     // Cache lightweight, fast-changing data briefly at the edge to save on quota.
-    res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
+    res.setHeader('Cache-Control', noCache ? 'no-store' : 's-maxage=15, stale-while-revalidate=30');
     return res.status(upstream.status).json(data);
   } catch (err) {
     return res.status(502).json({ error: 'Could not reach API-Football: ' + (err && err.message) });

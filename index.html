@@ -82,6 +82,15 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   <h1>Football data checker</h1>
   <p class="lede">See what your API-Football plan really covers: how many leagues, which data types, which seasons, and how many requests are left today. It goes through your own site, so no key is typed here.</p>
 
+  <section aria-labelledby="sa">
+    <h2 id="sa">A. One match in full: PSG v Barcelona</h2>
+    <p class="hint">Finds their match, then asks for line-ups, full statistics, events and player ratings, one request at a time, and reads your quota before and after each so you see exactly what every piece costs. About 7 requests in total (1 to find the match, 6 for the pieces). Reading the quota is free.</p>
+    <div class="row"><button id="mFind" class="primary" type="button">1. Find the match (1 request)</button></div>
+    <div id="mFound" class="status" role="status" aria-live="polite"></div>
+    <div class="row"><button id="mRun" type="button" disabled>2. Fetch everything for the chosen match</button></div>
+    <div id="mOut" class="tw"></div>
+  </section>
+
   <section aria-labelledby="s0">
     <h2 id="s0">0. Server check (start here)</h2>
     <p class="hint">Free. Asks this site's server to test the API-Football key and tells you in plain English what is wrong. The key is never shown, only its length and first/last two characters.</p>
@@ -156,6 +165,105 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   }
   function rawBox(raw){ var d = document.createElement('details'); d.className = 'rawd'; var sm = document.createElement('summary'); sm.textContent = 'Raw reply from your site'; var pre = document.createElement('pre'); pre.className = 'raw'; pre.textContent = raw; d.appendChild(sm); d.appendChild(pre); return d; }
   function el(tag, text, cls){ var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+
+
+  // ---------- A. one match in full ----------
+  var MATCHES = [], CHOSEN = null;
+  async function usedToday(){
+    var r = await api('status?_nc=' + Date.now());
+    var q = r.json && r.json.response && r.json.response.requests;
+    return q && q.current != null ? { used: q.current, limit: q.limit_day } : null;
+  }
+  function fxLine(f){
+    var d = (f.fixture.date || '').slice(0, 10), g = f.goals || {};
+    var sc = (g.home != null && g.away != null) ? g.home + '-' + g.away : 'not played';
+    return d + ' · ' + f.league.name + (f.league.round ? ' (' + f.league.round + ')' : '') + ' · ' + f.teams.home.name + ' ' + sc + ' ' + f.teams.away.name + ' · ' + f.fixture.status.short;
+  }
+  $('mFind').addEventListener('click', async function(){
+    var out = $('mFound'); out.className = 'status'; out.textContent = 'Looking…'; $('mFind').disabled = true; $('mRun').disabled = true; CHOSEN = null;
+    try {
+      var r = await api('fixtures/headtohead?h2h=85-529&last=10&_nc=' + Date.now());
+      var e = errText(r.json);
+      if (r.http !== 200 || !r.json || e) throw new Error(e || ('Your site answered ' + r.http));
+      MATCHES = (r.json.response || []).slice().sort(function(a, b){ return a.fixture.date < b.fixture.date ? 1 : -1; });
+      if (!MATCHES.length) throw new Error('No PSG v Barcelona match came back (team ids used: PSG 85, Barcelona 529).');
+      out.textContent = ''; var ul = el('ul', null, 'list');
+      MATCHES.forEach(function(f, i){
+        var li = el('li'), lab = document.createElement('label'), rb = document.createElement('input');
+        rb.type = 'radio'; rb.name = 'mpick'; rb.value = String(i); rb.checked = i === 0; rb.style.marginRight = '8px';
+        rb.addEventListener('change', function(){ CHOSEN = MATCHES[i]; });
+        lab.appendChild(rb); lab.appendChild(document.createTextNode(fxLine(f))); li.appendChild(lab); ul.appendChild(li);
+      });
+      CHOSEN = MATCHES[0];
+      out.appendChild(el('p', 'Newest first. Pick the match to analyse (the newest is chosen). Fixture ids and team names come straight from the API, so check they are the two clubs you mean.'));
+      out.appendChild(ul); $('mRun').disabled = false;
+      log.push('MATCH LIST ' + MATCHES.map(fxLine).join(' | '));
+    } catch (err){ out.className = 'status err'; out.textContent = (err && err.message) || 'Failed'; }
+    $('mFind').disabled = false;
+  });
+
+  function sumLineups(j){
+    var arr = j.response || []; if (!arr.length) return 'Nothing returned.';
+    return arr.map(function(t){ var xi = (t.startXI || []).map(function(p){ return p.player.number + ' ' + p.player.name; }).join(', ');
+      return t.team.name + ' · formation ' + (t.formation || '?') + ' · coach ' + ((t.coach && t.coach.name) || '?') + ' · starting XI (' + (t.startXI || []).length + '): ' + xi + ' · substitutes: ' + (t.substitutes || []).length; }).join('\n');
+  }
+  function sumStats(j){
+    var arr = j.response || []; if (arr.length < 2) return 'Nothing returned.';
+    var a = arr[0], b = arr[1], types = (a.statistics || []).map(function(s){ return s.type; });
+    var lines = types.map(function(t){ var x = (a.statistics.filter(function(s){ return s.type === t; })[0] || {}).value, y = ((b.statistics || []).filter(function(s){ return s.type === t; })[0] || {}).value; return t + ': ' + (x == null ? '–' : x) + '  |  ' + (y == null ? '–' : y); });
+    return a.team.name + '  |  ' + b.team.name + '  (' + types.length + ' statistics)\n' + lines.join('\n');
+  }
+  function sumEvents(j){
+    var arr = j.response || []; if (!arr.length) return 'Nothing returned.';
+    return arr.length + ' events\n' + arr.map(function(e){ return ((e.time && e.time.elapsed) != null ? e.time.elapsed + (e.time.extra ? '+' + e.time.extra : '') + "'" : '?') + ' ' + (e.team && e.team.name || '') + ' · ' + e.type + ' (' + (e.detail || '') + ') · ' + ((e.player && e.player.name) || '') + (e.assist && e.assist.name ? ' (assist ' + e.assist.name + ')' : ''); }).join('\n');
+  }
+  function sumPlayers(j){
+    var arr = j.response || []; if (!arr.length) return 'Nothing returned.';
+    var n = 0, rated = 0, keys = {};
+    arr.forEach(function(t){ (t.players || []).forEach(function(p){ n++; var s = (p.statistics || [])[0] || {}; if (s.games && s.games.rating) rated++; Object.keys(s).forEach(function(k){ keys[k] = 1; }); }); });
+    return n + ' players with statistics, ' + rated + ' with a rating. Groups per player: ' + Object.keys(keys).join(', ');
+  }
+  var STEPS = [
+    { id:'full',  label:'fixtures?id=… (the combined answer)', path:function(id){ return 'fixtures?id=' + id; },
+      sum:function(j){ var f = (j.response || [])[0]; if (!f) return 'Nothing returned.'; return 'Inside this ONE answer: events ' + (f.events || []).length + ', line-ups ' + (f.lineups || []).length + ' team(s), statistics ' + (f.statistics || []).length + ' team(s), players ' + (f.players || []).length + ' team(s).'; } },
+    { id:'lu',    label:'fixtures/lineups', path:function(id){ return 'fixtures/lineups?fixture=' + id; }, sum:sumLineups },
+    { id:'st',    label:'fixtures/statistics', path:function(id){ return 'fixtures/statistics?fixture=' + id; }, sum:sumStats },
+    { id:'ev',    label:'fixtures/events', path:function(id){ return 'fixtures/events?fixture=' + id; }, sum:sumEvents },
+    { id:'pl',    label:'fixtures/players (ratings, shots, passes…)', path:function(id){ return 'fixtures/players?fixture=' + id; }, sum:sumPlayers },
+    { id:'cov',   label:'competition coverage flags (what this plan says exists)', path:function(){ return 'leagues?id=' + CHOSEN.league.id + '&season=' + CHOSEN.league.season; },
+      sum:function(j){ var l = (j.response || [])[0]; var s = l && (l.seasons || []).filter(function(x){ return x.year === CHOSEN.league.season; })[0]; var c = s && s.coverage; if (!c) return 'No coverage information returned.'; var f = c.fixtures || {}; return 'events ' + f.events + ', line-ups ' + f.lineups + ', team statistics ' + f.statistics_fixtures + ', player statistics ' + f.statistics_players + ', standings ' + c.standings + ', injuries ' + c.injuries + ', predictions ' + c.predictions + ', odds ' + c.odds; } }
+  ];
+  $('mRun').addEventListener('click', async function(){
+    if (!CHOSEN) return; var id = CHOSEN.fixture.id; $('mRun').disabled = true; $('mFind').disabled = true;
+    var out = $('mOut'); out.textContent = ''; out.appendChild(el('p', 'Match: ' + fxLine(CHOSEN) + ' (fixture ' + id + ')', 'note'));
+    var tb = el('table'), hr = el('tr'); ['Piece','Credits used','What came back'].forEach(function(t){ hr.appendChild(el('th', t)); }); tb.appendChild(hr); out.appendChild(tb);
+    var total = 0, startAt = null, unknown = false;
+    try {
+      for (var i = 0; i < STEPS.length; i++){
+        var st = STEPS[i], tr = el('tr'); tr.appendChild(el('td', st.label)); var cc = el('td', '…'), dd = el('td', 'Asking…'); tr.appendChild(cc); tr.appendChild(dd); tb.appendChild(tr);
+        var before = await usedToday(); if (startAt == null && before) startAt = before.used;
+        var r = await api(st.path(id) + '&_nc=' + Date.now());
+        var e = errText(r.json);
+        var after = await usedToday();
+        var spent = (before && after) ? after.used - before.used : null;
+        if (spent == null) unknown = true; else total += spent;
+        cc.textContent = spent == null ? 'unknown' : String(spent);
+        dd.textContent = '';
+        if (r.http !== 200 || !r.json) dd.appendChild(el('span', 'Site error HTTP ' + r.http, 'pill fail'));
+        else if (e) dd.appendChild(el('span', e, 'pill warn'));
+        else { var pre = el('pre', st.sum(r.json), 'raw'); pre.style.maxHeight = '220px'; dd.appendChild(pre); dd.appendChild(rawBox(r.raw)); }
+        log.push('MATCH ' + st.label + ' | credits ' + (spent == null ? '?' : spent) + ' | ' + (e || ('HTTP ' + r.http)));
+        await new Promise(function(res){ setTimeout(res, 800); });   // free plan: 10 requests a minute
+        if (e && /limit|rate|request/i.test(e) && !/plan|season|access/i.test(e)) break;
+      }
+      var last = await usedToday();
+      var v = el('div', null, 'verdict'); v.appendChild(el('h3', 'Cost for this match'));
+      v.appendChild(el('p', unknown ? 'Some readings failed, so the total is not reliable.' : 'All pieces above: ' + total + ' request(s) in total' + (last ? ' (' + last.used + ' of ' + last.limit + ' used today now)' : '') + '.'));
+      v.appendChild(el('p', 'Reading it: if the combined "fixtures?id=" answer already holds line-ups, statistics, events and players, a single request per match is enough, and the separate pieces are only for checking. The coverage row says what API-Football itself claims exists for this competition on your plan.', 'note'));
+      out.appendChild(v);
+    } catch (err){ out.appendChild(el('p', 'Stopped: ' + ((err && err.message) || 'unexpected error'), 'status err')); }
+    $('mRun').disabled = false; $('mFind').disabled = false;
+  });
 
   // ---------- 0. server check ----------
   $('diag').addEventListener('click', async function(){

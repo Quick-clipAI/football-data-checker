@@ -3,6 +3,14 @@
 A throwaway Vercel project that tests the API-Football key on its own, away from Creator Booth.
 It contains the same football proxy Creator Booth uses, a server check, and the checker page.
 
+## Section A: one match in full (PSG v Barcelona)
+
+Finds their matches (head-to-head, 1 request), lets you pick one, then fetches the combined `fixtures?id=`
+answer, line-ups, team statistics, events, player statistics and the competition's coverage flags. It reads
+`/status` (free) before and after each request, so the table shows the real credits each piece cost.
+`_nc=<timestamp>` on those calls is a cache-buster; the proxy strips it and answers `no-store`, so the
+quota readings are never served from the edge cache.
+
 ## Deploy (about 5 minutes)
 
 1. New GitHub repo (private is fine), e.g. `football-proxy-test`. Upload everything in this folder.
