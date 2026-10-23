@@ -182,7 +182,7 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   $('mFind').addEventListener('click', async function(){
     var out = $('mFound'); out.className = 'status'; out.textContent = 'Looking…'; $('mFind').disabled = true; $('mRun').disabled = true; CHOSEN = null;
     try {
-      var r = await api('fixtures/headtohead?h2h=85-529&last=10&_nc=' + Date.now());
+      var r = await api('fixtures__headtohead?h2h=85-529&last=10&_nc=' + Date.now());
       var e = errText(r.json);
       if (r.http !== 200 || !r.json || e) throw new Error(e || ('Your site answered ' + r.http));
       MATCHES = (r.json.response || []).slice().sort(function(a, b){ return a.fixture.date < b.fixture.date ? 1 : -1; });
@@ -226,10 +226,10 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   var STEPS = [
     { id:'full',  label:'fixtures?id=… (the combined answer)', path:function(id){ return 'fixtures?id=' + id; },
       sum:function(j){ var f = (j.response || [])[0]; if (!f) return 'Nothing returned.'; return 'Inside this ONE answer: events ' + (f.events || []).length + ', line-ups ' + (f.lineups || []).length + ' team(s), statistics ' + (f.statistics || []).length + ' team(s), players ' + (f.players || []).length + ' team(s).'; } },
-    { id:'lu',    label:'fixtures/lineups', path:function(id){ return 'fixtures/lineups?fixture=' + id; }, sum:sumLineups },
-    { id:'st',    label:'fixtures/statistics', path:function(id){ return 'fixtures/statistics?fixture=' + id; }, sum:sumStats },
-    { id:'ev',    label:'fixtures/events', path:function(id){ return 'fixtures/events?fixture=' + id; }, sum:sumEvents },
-    { id:'pl',    label:'fixtures/players (ratings, shots, passes…)', path:function(id){ return 'fixtures/players?fixture=' + id; }, sum:sumPlayers },
+    { id:'lu',    label:'fixtures/lineups', path:function(id){ return 'fixtures__lineups?fixture=' + id; }, sum:sumLineups },
+    { id:'st',    label:'fixtures/statistics', path:function(id){ return 'fixtures__statistics?fixture=' + id; }, sum:sumStats },
+    { id:'ev',    label:'fixtures/events', path:function(id){ return 'fixtures__events?fixture=' + id; }, sum:sumEvents },
+    { id:'pl',    label:'fixtures/players (ratings, shots, passes…)', path:function(id){ return 'fixtures__players?fixture=' + id; }, sum:sumPlayers },
     { id:'cov',   label:'competition coverage flags (what this plan says exists)', path:function(){ return 'leagues?id=' + CHOSEN.league.id + '&season=' + CHOSEN.league.season; },
       sum:function(j){ var l = (j.response || [])[0]; var s = l && (l.seasons || []).filter(function(x){ return x.year === CHOSEN.league.season; })[0]; var c = s && s.coverage; if (!c) return 'No coverage information returned.'; var f = c.fixtures || {}; return 'events ' + f.events + ', line-ups ' + f.lineups + ', team statistics ' + f.statistics_fixtures + ', player statistics ' + f.statistics_players + ', standings ' + c.standings + ', injuries ' + c.injuries + ', predictions ' + c.predictions + ', odds ' + c.odds; } }
   ];

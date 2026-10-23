@@ -82,6 +82,9 @@ export default async function handler(req, res) {
   }
   // `_nc` is a cache-buster used by the checker page so quota readings are never served from the edge cache.
   const noCache = target.params.has('_nc'); target.params.delete('_nc');
+  // This Vercel project only routes ONE segment after /api/football/ (nested addresses answer 404), so two-part endpoints
+  // are sent with a double underscore: fixtures__lineups -> fixtures/lineups.
+  target.path = target.path.replace(/__+/g, '/');
   const qs = target.params.toString();
   const url = `${API_BASE}/${target.path}${qs ? '?' + qs : ''}`;
 
