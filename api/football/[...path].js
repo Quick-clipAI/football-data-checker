@@ -40,7 +40,7 @@ function minimalGet(urlStr, key, timeoutMs = 15000) {
         } catch (e) { /* fall through; JSON parse below will fail and data stays null */ }
         let data = null;
         try { data = JSON.parse(buf.toString('utf8')); } catch (e) { /* not JSON */ }
-        resolve({ status: resp.statusCode || 0, data });
+        resolve({ status: resp.statusCode || 0, data, headers: resp.headers || {} });
       });
     });
     req.setTimeout(timeoutMs, () => req.destroy(new Error('API-Football did not answer within ' + Math.round(timeoutMs / 1000) + 's')));
@@ -91,6 +91,13 @@ export default async function handler(req, res) {
   try {
     const upstream = await minimalGet(url, key);
     const data = upstream.data || {};
+    // Pass API-Football's own quota counters on, so the checker can show exactly what each call cost without
+    // spending extra requests on /status (which also lags behind and counts toward the per-minute limit).
+    const H = upstream.headers || {};
+    const pass = (from, to) => { if (H[from] != null) res.setHeader(to, String(H[from])); };
+    pass('x-ratelimit-requests-remaining', 'X-Quota-Day-Remaining'); pass('x-ratelimit-requests-limit', 'X-Quota-Day-Limit');
+    pass('x-ratelimit-remaining', 'X-Quota-Minute-Remaining'); pass('x-ratelimit-limit', 'X-Quota-Minute-Limit');
+    res.setHeader('Access-Control-Expose-Headers', 'X-Quota-Day-Remaining, X-Quota-Day-Limit, X-Quota-Minute-Remaining, X-Quota-Minute-Limit');
 
     // API-Football reports a rejected key with HTTP 200 and an error inside the body (v3 puts it in
     // errors.token; an older style uses api.error). Passing that through as a "success" hid the real

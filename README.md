@@ -6,8 +6,8 @@ It contains the same football proxy Creator Booth uses, a server check, and the 
 ## Section A: one match in full (PSG v Barcelona)
 
 Finds their matches (head-to-head, 1 request), lets you pick one, then fetches the combined `fixtures?id=`
-answer, line-ups, team statistics, events, player statistics and the competition's coverage flags. It reads
-`/status` (free) before and after each request, so the table shows the real credits each piece cost.
+answer, line-ups, team statistics, events, player statistics and the competition's coverage flags. The proxy passes API-Football's own
+"requests left today" counter back on every answer (`X-Quota-Day-Remaining`), and the table shows how far it fell per call, so measuring costs no extra requests (and does not trip the 10-per-minute limit).
 Two-part endpoints are sent as `fixtures__lineups` (this Vercel project only routes one segment after `/api/football/`; the proxy turns `__` into `/`).
 `_nc=<timestamp>` on those calls is a cache-buster; the proxy strips it and answers `no-store`, so the
 quota readings are never served from the edge cache.

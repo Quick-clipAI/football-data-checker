@@ -84,7 +84,7 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
 
   <section aria-labelledby="sa">
     <h2 id="sa">A. One match in full: PSG v Barcelona</h2>
-    <p class="hint">Finds their match, then asks for line-ups, full statistics, events and player ratings, one request at a time, and reads your quota before and after each so you see exactly what every piece costs. About 7 requests in total (1 to find the match, 6 for the pieces). Reading the quota is free.</p>
+    <p class="hint">Finds their match, then asks for line-ups, full statistics, events and player ratings, one request at a time, and reads your quota before and after each so you see exactly what every piece costs. About 7 requests in total (1 to find the match, 6 for the pieces). The cost of each piece is read from API-Football's own requests-left counter that comes back with every answer, so no extra requests are spent measuring.</p>
     <div class="row"><button id="mFind" class="primary" type="button">1. Find the match (1 request)</button></div>
     <div id="mFound" class="status" role="status" aria-live="polite"></div>
     <div class="row"><button id="mRun" type="button" disabled>2. Fetch everything for the chosen match</button></div>
@@ -142,7 +142,8 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
     var res = await fetch(base() + '/' + path, { signal: signal });
     var text = await res.text().catch(function(){ return ''; });
     var json = null; try { json = JSON.parse(text); } catch (e) {}
-    return { http: res.status, json: json, raw: 'HTTP ' + res.status + '\n' + text.slice(0, 900), ms: Math.round(performance.now() - t0) };
+    var dq = res.headers.get('X-Quota-Day-Remaining');
+    return { http: res.status, json: json, raw: 'HTTP ' + res.status + '\n' + text.slice(0, 900), ms: Math.round(performance.now() - t0), left: dq != null ? Number(dq) : null };
   }
   function errText(j){
     if (!j) return '';
@@ -168,7 +169,7 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
 
 
   // ---------- A. one match in full ----------
-  var MATCHES = [], CHOSEN = null;
+  var MATCHES = [], CHOSEN = null, LAST_LEFT = null;
   async function usedToday(){
     var r = await api('status?_nc=' + Date.now());
     var q = r.json && r.json.response && r.json.response.requests;
@@ -183,6 +184,7 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
     var out = $('mFound'); out.className = 'status'; out.textContent = 'Looking…'; $('mFind').disabled = true; $('mRun').disabled = true; CHOSEN = null;
     try {
       var r = await api('fixtures__headtohead?h2h=85-529&_nc=' + Date.now());
+      if (r.left != null) LAST_LEFT = r.left;
       var e = errText(r.json);
       if (r.http !== 200 || !r.json || e) throw new Error(e || ('Your site answered ' + r.http));
       MATCHES = (r.json.response || []).slice().sort(function(a, b){ return a.fixture.date < b.fixture.date ? 1 : -1; }).slice(0, 10);
@@ -237,28 +239,28 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
     if (!CHOSEN) return; var id = CHOSEN.fixture.id; $('mRun').disabled = true; $('mFind').disabled = true;
     var out = $('mOut'); out.textContent = ''; out.appendChild(el('p', 'Match: ' + fxLine(CHOSEN) + ' (fixture ' + id + ')', 'note'));
     var tb = el('table'), hr = el('tr'); ['Piece','Credits used','What came back'].forEach(function(t){ hr.appendChild(el('th', t)); }); tb.appendChild(hr); out.appendChild(tb);
-    var total = 0, startAt = null, unknown = false;
+    var total = 0, unknown = false, startLeft = LAST_LEFT;
     try {
       for (var i = 0; i < STEPS.length; i++){
         var st = STEPS[i], tr = el('tr'); tr.appendChild(el('td', st.label)); var cc = el('td', '…'), dd = el('td', 'Asking…'); tr.appendChild(cc); tr.appendChild(dd); tb.appendChild(tr);
-        var before = await usedToday(); if (startAt == null && before) startAt = before.used;
         var r = await api(st.path(id) + '&_nc=' + Date.now());
         var e = errText(r.json);
-        var after = await usedToday();
-        var spent = (before && after) ? after.used - before.used : null;
+        // cost = how far API-Football's own "requests left today" counter fell since the previous call
+        var spent = (r.left != null && LAST_LEFT != null) ? LAST_LEFT - r.left : null;
+        if (r.left != null) LAST_LEFT = r.left;
         if (spent == null) unknown = true; else total += spent;
         cc.textContent = spent == null ? 'unknown' : String(spent);
         dd.textContent = '';
-        if (r.http !== 200 || !r.json) dd.appendChild(el('span', 'Site error HTTP ' + r.http, 'pill fail'));
+        if (r.http === 429) dd.appendChild(el('span', 'Too many requests per minute (free plan: 10). Wait a minute and tap again.', 'pill warn'));
+        else if (r.http !== 200 || !r.json) dd.appendChild(el('span', 'Site error HTTP ' + r.http, 'pill fail'));
         else if (e) dd.appendChild(el('span', e, 'pill warn'));
         else { var pre = el('pre', st.sum(r.json), 'raw'); pre.style.maxHeight = '220px'; dd.appendChild(pre); dd.appendChild(rawBox(r.raw)); }
-        log.push('MATCH ' + st.label + ' | credits ' + (spent == null ? '?' : spent) + ' | ' + (e || ('HTTP ' + r.http)));
+        log.push('MATCH ' + st.label + ' | credits ' + (spent == null ? '?' : spent) + ' | left ' + (r.left == null ? '?' : r.left) + ' | ' + (e || ('HTTP ' + r.http)));
         await new Promise(function(res){ setTimeout(res, 800); });   // free plan: 10 requests a minute
-        if (e && /limit|rate|request/i.test(e) && !/plan|season|access/i.test(e)) break;
+        if (r.http === 429 || (e && /limit|rate|request/i.test(e) && !/plan|season|access/i.test(e))) break;
       }
-      var last = await usedToday();
       var v = el('div', null, 'verdict'); v.appendChild(el('h3', 'Cost for this match'));
-      v.appendChild(el('p', unknown ? 'Some readings failed, so the total is not reliable.' : 'All pieces above: ' + total + ' request(s) in total' + (last ? ' (' + last.used + ' of ' + last.limit + ' used today now)' : '') + '.'));
+      v.appendChild(el('p', unknown ? 'Some readings failed, so the total is not reliable.' : 'All pieces above: ' + total + ' request(s) in total' + (LAST_LEFT != null ? ' (' + LAST_LEFT + ' requests left today)' : '') + '.'));
       v.appendChild(el('p', 'Reading it: if the combined "fixtures?id=" answer already holds line-ups, statistics, events and players, a single request per match is enough, and the separate pieces are only for checking. The coverage row says what API-Football itself claims exists for this competition on your plan.', 'note'));
       out.appendChild(v);
     } catch (err){ out.appendChild(el('p', 'Stopped: ' + ((err && err.message) || 'unexpected error'), 'status err')); }
