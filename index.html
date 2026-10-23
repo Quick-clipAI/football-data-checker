@@ -182,10 +182,10 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
   $('mFind').addEventListener('click', async function(){
     var out = $('mFound'); out.className = 'status'; out.textContent = 'Looking…'; $('mFind').disabled = true; $('mRun').disabled = true; CHOSEN = null;
     try {
-      var r = await api('fixtures__headtohead?h2h=85-529&last=10&_nc=' + Date.now());
+      var r = await api('fixtures__headtohead?h2h=85-529&_nc=' + Date.now());
       var e = errText(r.json);
       if (r.http !== 200 || !r.json || e) throw new Error(e || ('Your site answered ' + r.http));
-      MATCHES = (r.json.response || []).slice().sort(function(a, b){ return a.fixture.date < b.fixture.date ? 1 : -1; });
+      MATCHES = (r.json.response || []).slice().sort(function(a, b){ return a.fixture.date < b.fixture.date ? 1 : -1; }).slice(0, 10);
       if (!MATCHES.length) throw new Error('No PSG v Barcelona match came back (team ids used: PSG 85, Barcelona 529).');
       out.textContent = ''; var ul = el('ul', null, 'list');
       MATCHES.forEach(function(f, i){
