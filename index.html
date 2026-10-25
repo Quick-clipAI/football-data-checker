@@ -158,6 +158,8 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
     var e = j.errors;
     if (e) parts.push(Array.isArray(e) ? e.join('; ') : Object.keys(e).map(function(k){ return k + ': ' + e[k]; }).join('; '));
     if (j.api && j.api.error) parts.push(String(j.api.error));
+    if (j.upstream) { var u = errText(j.upstream); if (u) parts.push('API-Football said: ' + u); }
+    if (!parts.length && j.error) parts.push(String(j.error));
     return parts.filter(Boolean).join('; ');
   }
   // Plain-English explanation when the proxy says the API key was rejected (HTTP 401 from your site).
@@ -309,8 +311,8 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
         if (r.left != null) { if (firstLeft == null) firstLeft = r.left; lastLeft = r.left; }
         cc.textContent = spent == null ? (i === 0 ? 'first' : '?') : String(spent); dd.textContent = '';
         if (r.http === 429) dd.appendChild(el('span', 'Too many requests per minute. Wait a minute and run again.', 'pill warn'));
-        else if (r.http !== 200 || !r.json) dd.appendChild(el('span', 'Site error HTTP ' + r.http, 'pill fail'));
-        else if (e) dd.appendChild(el('span', 'Refused by the plan: ' + e, 'pill warn'));
+        else if (r.http !== 200 && !e) dd.appendChild(el('span', 'Site error HTTP ' + r.http, 'pill fail'));
+        else if (e) { dd.appendChild(el('span', (r.http === 200 ? 'Refused by the plan: ' : 'HTTP ' + r.http + ': ') + e, 'pill warn')); dd.appendChild(rawBox(r.raw)); }
         else { var pre = el('pre', st.sum(r.json), 'raw'); pre.style.maxHeight = '260px'; dd.appendChild(pre); dd.appendChild(rawBox(r.raw)); }
         log.push('PLAYERDATA ' + st.label + ' | left ' + (r.left == null ? '?' : r.left) + ' | ' + (e || ('HTTP ' + r.http)) + (r.http === 200 && !e ? ' | ' + st.sum(r.json).split('\n')[0] : ''));
         await new Promise(function(res){ setTimeout(res, 1200); });
