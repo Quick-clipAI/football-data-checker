@@ -14,7 +14,7 @@ quota readings are never served from the edge cache.
 
 ## Section B: players, transfers and injuries (Manchester United)
 
-6 requests: `transfers?team=33`, `injuries?league=39&season=2026` and `season=2025`, `players/squads?team=33`, `sidelined?player=<first squad player>`, `coachs?team=33`. Shows what the free plan returns (dates, loan/free/fee type, refusals) so we know what Creator Booth can build on. Use "Copy all results" at the bottom of the page afterwards.
+5 requests: `transfers?team=33`, `players/squads?team=33`, `sidelined?player=<first squad player>`, `teams?league=39&season=2024`, `coachs?team=33`. Injuries for 2025/2026 are blocked on the free plan (only 2022-2024 open). The log also carries a raw sample of each answer.
 
 ## Deploy (about 5 minutes)
 

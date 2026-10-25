@@ -93,8 +93,8 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
 
   <section aria-labelledby="sb">
     <h2 id="sb">B. Players, transfers and injuries (Manchester United)</h2>
-    <p class="hint">Tests what the plan returns for the data we want for player cards and availability: a club's transfers (with dates and loan/free/fee type), the injuries list, the current squad, one player's sidelined history, and the coach. 6 requests. Each row shows what came back or the plan's refusal, so we know what we can build on.</p>
-    <div class="row"><button id="bRun" class="primary" type="button">Run the player-data test (6 requests)</button></div>
+    <p class="hint">Tests the data we want for player cards and availability: a club's transfers (dates and type), the current squad, one player's sidelined history, the league's team ids, and the coach. 5 requests. (The injuries list is already known to be blocked on the free plan for 2025 and 2026.) Each row shows what came back or the plan's refusal, so we know what we can build on.</p>
+    <div class="row"><button id="bRun" class="primary" type="button">Run the player-data test (5 requests)</button></div>
     <div id="bOut" class="tw"></div>
   </section>
 
@@ -285,16 +285,13 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
         all.sort(function(a, b){ return a.d < b.d ? 1 : -1; });
         var types = {}; all.forEach(function(t){ types[t.ty || '(none)'] = (types[t.ty || '(none)'] || 0) + 1; });
         return r.length + ' players, ' + all.length + ' moves. Newest move date: ' + (all[0] ? all[0].d : 'none') + '\nTypes seen: ' + Object.keys(types).map(function(k){ return k + ' x' + types[k]; }).join(', ') + '\nNewest 6:\n' + firstN(all, 6).map(function(t){ return t.d + '  ' + t.n + ': ' + t.f + ' -> ' + t.to + '  [' + t.ty + ']'; }).join('\n'); } },
-    { label: 'Injuries, Premier League 2026 (injuries?league=39&season=2026)', path: function(){ return 'injuries?league=39&season=2026'; }, sum: function(j){
-        var r = j.response || [];
-        return r.length + ' entries.\n' + firstN(r, 6).map(function(x){ return (x.fixture && x.fixture.date || '').slice(0, 10) + '  ' + (x.player && x.player.name) + ' (' + (x.team && x.team.name) + ')  type: ' + (x.player && x.player.type) + '  reason: ' + (x.player && x.player.reason); }).join('\n') + '\nFields on an entry: ' + (r[0] ? Object.keys(r[0]).join(', ') + ' | player: ' + Object.keys(r[0].player || {}).join(', ') : '-'); } },
-    { label: 'Injuries, Premier League 2025 (injuries?league=39&season=2025)', path: function(){ return 'injuries?league=39&season=2025'; }, sum: function(j){ var r = j.response || []; return r.length + ' entries (shows whether last season is open on this plan).'; } },
     { label: 'Current squad (players/squads?team=33)', path: function(){ return 'players__squads?team=33'; }, sum: function(j){
         var r = (j.response && j.response[0] && j.response[0].players) || []; BPLAYER = r[0] && r[0].id;
         return r.length + ' players.\n' + firstN(r, 5).map(function(p){ return p.id + '  ' + p.name + '  #' + p.number + '  ' + p.position + '  age ' + p.age; }).join('\n'); } },
     { label: 'Sidelined history of one player (sidelined?player=<first squad player>)', path: function(){ return 'sidelined?player=' + (BPLAYER || 0); }, sum: function(j){
         var r = j.response || [];
         return r.length + ' records for player ' + BPLAYER + '.\n' + firstN(r, 6).map(function(x){ return x.type + '  ' + x.start + ' -> ' + x.end; }).join('\n'); } },
+    { label: 'Teams of a league, 2024 (teams?league=39&season=2024)', path: function(){ return 'teams?league=39&season=2024'; }, sum: function(j){ var r = j.response || []; return r.length + ' teams.\n' + firstN(r, 4).map(function(x){ return x.team.id + '  ' + x.team.name + '  (' + x.team.code + ')'; }).join('\n'); } },
     { label: 'Coach (coachs?team=33)', path: function(){ return 'coachs?team=33'; }, sum: function(j){
         var r = j.response || []; return r.length + ' coach record(s).\n' + firstN(r, 3).map(function(c){ var cur = (c.career || []).filter(function(x){ return !x.end; })[0]; return c.name + ' (' + c.nationality + ', age ' + c.age + ')' + (cur ? ' - current: ' + cur.team.name + ' since ' + cur.start : ''); }).join('\n'); } }
   ];
@@ -314,7 +311,7 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
         else if (r.http !== 200 && !e) dd.appendChild(el('span', 'Site error HTTP ' + r.http, 'pill fail'));
         else if (e) { dd.appendChild(el('span', (r.http === 200 ? 'Refused by the plan: ' : 'HTTP ' + r.http + ': ') + e, 'pill warn')); dd.appendChild(rawBox(r.raw)); }
         else { var pre = el('pre', st.sum(r.json), 'raw'); pre.style.maxHeight = '260px'; dd.appendChild(pre); dd.appendChild(rawBox(r.raw)); }
-        log.push('PLAYERDATA ' + st.label + ' | left ' + (r.left == null ? '?' : r.left) + ' | ' + (e || ('HTTP ' + r.http)) + (r.http === 200 && !e ? ' | ' + st.sum(r.json).split('\n')[0] : ''));
+        log.push('SAMPLE ' + st.label + ' => ' + JSON.stringify((r.json && r.json.response || []).slice(0, st.label.indexOf('Transfers') === 0 ? 1 : 2)).slice(0, 1500)); log.push('PLAYERDATA ' + st.label + ' | left ' + (r.left == null ? '?' : r.left) + ' | ' + (e || ('HTTP ' + r.http)) + (r.http === 200 && !e ? ' | ' + st.sum(r.json).split('\n')[0] : ''));
         await new Promise(function(res){ setTimeout(res, 1200); });
         if (r.http === 429) break;
       }
