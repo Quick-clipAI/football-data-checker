@@ -12,6 +12,10 @@ Two-part endpoints are sent as `fixtures__lineups` (this Vercel project only rou
 `_nc=<timestamp>` on those calls is a cache-buster; the proxy strips it and answers `no-store`, so the
 quota readings are never served from the edge cache.
 
+## Section B: players, transfers and injuries (Manchester United)
+
+6 requests: `transfers?team=33`, `injuries?league=39&season=2026` and `season=2025`, `players/squads?team=33`, `sidelined?player=<first squad player>`, `coachs?team=33`. Shows what the free plan returns (dates, loan/free/fee type, refusals) so we know what Creator Booth can build on. Use "Copy all results" at the bottom of the page afterwards.
+
 ## Deploy (about 5 minutes)
 
 1. New GitHub repo (private is fine), e.g. `football-proxy-test`. Upload everything in this folder.

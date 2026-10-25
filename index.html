@@ -91,6 +91,13 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
     <div id="mOut" class="tw"></div>
   </section>
 
+  <section aria-labelledby="sb">
+    <h2 id="sb">B. Players, transfers and injuries (Manchester United)</h2>
+    <p class="hint">Tests what the plan returns for the data we want for player cards and availability: a club's transfers (with dates and loan/free/fee type), the injuries list, the current squad, one player's sidelined history, and the coach. 6 requests. Each row shows what came back or the plan's refusal, so we know what we can build on.</p>
+    <div class="row"><button id="bRun" class="primary" type="button">Run the player-data test (6 requests)</button></div>
+    <div id="bOut" class="tw"></div>
+  </section>
+
   <section aria-labelledby="s0">
     <h2 id="s0">0. Server check (start here)</h2>
     <p class="hint">Free. Asks this site's server to test the API-Football key and tells you in plain English what is wrong. The key is never shown, only its length and first/last two characters.</p>
@@ -265,6 +272,53 @@ details.rawd summary{font-size:13px;color:var(--ink2);cursor:pointer;margin-top:
       out.appendChild(v);
     } catch (err){ out.appendChild(el('p', 'Stopped: ' + ((err && err.message) || 'unexpected error'), 'status err')); }
     $('mRun').disabled = false; $('mFind').disabled = false;
+  });
+
+  // ---------- B. players, transfers, injuries ----------
+  function firstN(a, n){ return (a || []).slice(0, n); }
+  var BSTEPS = [
+    { label: 'Transfers of the club (transfers?team=33)', path: function(){ return 'transfers?team=33'; }, sum: function(j){
+        var r = j.response || [], all = [];
+        r.forEach(function(p){ (p.transfers || []).forEach(function(t){ all.push({ n: p.player && p.player.name, d: t.date, ty: t.type, f: t.teams && t.teams.out && t.teams.out.name, to: t.teams && t.teams.in && t.teams.in.name }); }); });
+        all.sort(function(a, b){ return a.d < b.d ? 1 : -1; });
+        var types = {}; all.forEach(function(t){ types[t.ty || '(none)'] = (types[t.ty || '(none)'] || 0) + 1; });
+        return r.length + ' players, ' + all.length + ' moves. Newest move date: ' + (all[0] ? all[0].d : 'none') + '\nTypes seen: ' + Object.keys(types).map(function(k){ return k + ' x' + types[k]; }).join(', ') + '\nNewest 6:\n' + firstN(all, 6).map(function(t){ return t.d + '  ' + t.n + ': ' + t.f + ' -> ' + t.to + '  [' + t.ty + ']'; }).join('\n'); } },
+    { label: 'Injuries, Premier League 2026 (injuries?league=39&season=2026)', path: function(){ return 'injuries?league=39&season=2026'; }, sum: function(j){
+        var r = j.response || [];
+        return r.length + ' entries.\n' + firstN(r, 6).map(function(x){ return (x.fixture && x.fixture.date || '').slice(0, 10) + '  ' + (x.player && x.player.name) + ' (' + (x.team && x.team.name) + ')  type: ' + (x.player && x.player.type) + '  reason: ' + (x.player && x.player.reason); }).join('\n') + '\nFields on an entry: ' + (r[0] ? Object.keys(r[0]).join(', ') + ' | player: ' + Object.keys(r[0].player || {}).join(', ') : '-'); } },
+    { label: 'Injuries, Premier League 2025 (injuries?league=39&season=2025)', path: function(){ return 'injuries?league=39&season=2025'; }, sum: function(j){ var r = j.response || []; return r.length + ' entries (shows whether last season is open on this plan).'; } },
+    { label: 'Current squad (players/squads?team=33)', path: function(){ return 'players__squads?team=33'; }, sum: function(j){
+        var r = (j.response && j.response[0] && j.response[0].players) || []; BPLAYER = r[0] && r[0].id;
+        return r.length + ' players.\n' + firstN(r, 5).map(function(p){ return p.id + '  ' + p.name + '  #' + p.number + '  ' + p.position + '  age ' + p.age; }).join('\n'); } },
+    { label: 'Sidelined history of one player (sidelined?player=<first squad player>)', path: function(){ return 'sidelined?player=' + (BPLAYER || 0); }, sum: function(j){
+        var r = j.response || [];
+        return r.length + ' records for player ' + BPLAYER + '.\n' + firstN(r, 6).map(function(x){ return x.type + '  ' + x.start + ' -> ' + x.end; }).join('\n'); } },
+    { label: 'Coach (coachs?team=33)', path: function(){ return 'coachs?team=33'; }, sum: function(j){
+        var r = j.response || []; return r.length + ' coach record(s).\n' + firstN(r, 3).map(function(c){ var cur = (c.career || []).filter(function(x){ return !x.end; })[0]; return c.name + ' (' + c.nationality + ', age ' + c.age + ')' + (cur ? ' - current: ' + cur.team.name + ' since ' + cur.start : ''); }).join('\n'); } }
+  ];
+  var BPLAYER = null;
+  $('bRun').addEventListener('click', async function(){
+    $('bRun').disabled = true; var out = $('bOut'); out.textContent = '';
+    var tb = el('table'), hr = el('tr'); ['Test','Credits','What came back'].forEach(function(t){ hr.appendChild(el('th', t)); }); tb.appendChild(hr); out.appendChild(tb);
+    var firstLeft = null, lastLeft = null;
+    try {
+      for (var i = 0; i < BSTEPS.length; i++){
+        var st = BSTEPS[i], tr = el('tr'); tr.appendChild(el('td', st.label)); var cc = el('td', '…'), dd = el('td', 'Asking…'); tr.appendChild(cc); tr.appendChild(dd); tb.appendChild(tr);
+        var r = await api(st.path() + (st.path().indexOf('?') > -1 ? '&' : '?') + '_nc=' + Date.now());
+        var e = errText(r.json), spent = (r.left != null && lastLeft != null) ? lastLeft - r.left : null;
+        if (r.left != null) { if (firstLeft == null) firstLeft = r.left; lastLeft = r.left; }
+        cc.textContent = spent == null ? (i === 0 ? 'first' : '?') : String(spent); dd.textContent = '';
+        if (r.http === 429) dd.appendChild(el('span', 'Too many requests per minute. Wait a minute and run again.', 'pill warn'));
+        else if (r.http !== 200 || !r.json) dd.appendChild(el('span', 'Site error HTTP ' + r.http, 'pill fail'));
+        else if (e) dd.appendChild(el('span', 'Refused by the plan: ' + e, 'pill warn'));
+        else { var pre = el('pre', st.sum(r.json), 'raw'); pre.style.maxHeight = '260px'; dd.appendChild(pre); dd.appendChild(rawBox(r.raw)); }
+        log.push('PLAYERDATA ' + st.label + ' | left ' + (r.left == null ? '?' : r.left) + ' | ' + (e || ('HTTP ' + r.http)) + (r.http === 200 && !e ? ' | ' + st.sum(r.json).split('\n')[0] : ''));
+        await new Promise(function(res){ setTimeout(res, 1200); });
+        if (r.http === 429) break;
+      }
+      out.appendChild(el('p', lastLeft != null ? 'Requests left today: ' + lastLeft + '. Tap "Copy all results" at the bottom and send it to me.' : 'Tap "Copy all results" at the bottom and send it to me.', 'note'));
+    } catch (err){ out.appendChild(el('p', 'Stopped: ' + ((err && err.message) || 'unexpected error'), 'status err')); }
+    $('bRun').disabled = false;
   });
 
   // ---------- 0. server check ----------
